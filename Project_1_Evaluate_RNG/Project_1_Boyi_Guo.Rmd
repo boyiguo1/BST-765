@@ -2,10 +2,104 @@
 title: "Project 1 Evaluate RNG"
 author: "Boyi Guo"
 date: "2/9/2021"
-output: pdf_document
+output: 
+  pdf_document:
+     extra_dependencies: ["amsmath"]
+bibliography:
+  - ref.bib
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+if(!require("e1071")) install.packages("e1071")
+library(dplyr)
+
+# Transformation Constants
+c0 <- 0.108304
+c1 <- 1.104252
+c2 <- -0.123347
+c3 <- -0.045284
+c4 <- 0.005014
+c5 <- 0.001285
+
+# Simulation Parameters
+n_sample <- 1e5
+n_it <- 1000
+
+# Ancillary functions
+beta_mean <- function(alpha, beta) alpha/(alpha+beta)
+beta_var <- function(alpha, beta) alpha*beta/((alpha+beta)^2*(alpha+beta+1))
+beta_sd <- function(alpha, beta) sqrt(beta_var(alpha, beta))
+beta_skew <- function(alpha, beta)
+  (2*(beta-alpha)*sqrt(alpha+beta+1))/((alpha+beta+2)*sqrt(alpha*beta))
 ```
 
+## Data Generating Process
+We follow @headrick2002 to simulate a Beta distribution ($\alpha = 4, \beta = 2$) from a normal distribution with mean 0 and standard deviation 1. Following the transformation equation, we can write a _standardized_ Beta distributed variable $Y_Z$ as a combination of polynomial terms of the normally distributed variable $X$,
+
+\begin{equation}
+  \label{eq:transf}
+  Y_Z = c_0 + c_1 X + c_2X^2 + c_3X^3 + c4X^4 + c_5X^5,
+\end{equation}
+
+where $X$ follows a normal distribution, N(0,1), $c_0 = `r c0`, c_1 = `r c1`, c_2 = `r c2`, c_3 = `r c3`, c_4 = `r c4`, c_5 = `r c5`$. We further scale and center the standardized beta distribution back to the original scale and range,
+
+\begin{equation}
+  \label{eq:scale}
+  Y = Y_Z*\sigma_{\beta_{4,2}} + \mu_{\beta_{4,2}},
+\end{equation}
+
+where the mean of a Beta(4,2), $\mu_{\beta_{4,2}} \approx 0.67$ and the standard deviation of a Beta(4,2), $\sigma_{\beta_{4,2}} \approx 0.178$.
+
+In each iteration of the simulation, we first simulate $X_i, i=1,\dots,`r (n_sample <- 1e5) %>% format(scientific=FALSE, big.mark = ",")`$ independently follows a standard normal distribution, following with the aforementioned transformation (Equation \eqref{eq:transf},\eqref{eq:scale}) to generate $Y_i$. Sample mean, variance, skewness, and kurtosis are calculated for the `r (n_sample <- 1e5) %>% format(scientific=FALSE, big.mark = ",")` data points. In total, we have `r n_it` iterations of the described simulation.
+
+The simulation is conducted on a 64-bit Windows 10 Platform machine with Inter i5 processor and 8 GB RAM. The simulation is implemented in `r R.version$version.string`.
+
+
+### Implementation in R
+
+```{r}
+# Note: the constants c have been loaded in the computation environment
+hendrick_beta_4_2 <- function(x) {
+  ret <- c0 + c1*x + c2*(x^2) + c3*(x^3) + c4*(x^4) + c5*(x^5)
+  # return to the original scale and position
+  ret*beta_sd(4,2) + beta_mean(4,2)
+}
+
+# wrapper function for each iteration in the simulation
+sim_iteration <- function(
+  it,
+  n_sample,  # Sample Size
+  func       # Transformation Function
+){
+  # Simulate X
+  X <- rnorm(n_sample, mean = 0, sd = 1)
+  Y <- func(X)
+  
+  # return
+  data.frame(
+    it = it,
+    mean = mean(Y),
+    var = var(Y),
+    skew = e1071::skewness(Y),
+    kurt = e1071::kurtosis(Y, type = 1)
+  )
+}
+
+# Simulation Body
+set.seed(1)
+
+sim_res <- purrr::map_dfr(1:10, .f = sim_iteration,
+                          n_sample = n_sample, func = hendrick_beta_4_2)
+```
+
+## Result
+
+
+### Goodness of fit
+
+
+
+\newpage
+## Reference
