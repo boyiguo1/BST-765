@@ -10,10 +10,12 @@ bibliography:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
 
 if(!require("e1071")) install.packages("e1071")
 library(dplyr)
+library(knitr)
 
 # Transformation Constants
 c0 <- 0.108304
@@ -33,6 +35,8 @@ beta_var <- function(alpha, beta) alpha*beta/((alpha+beta)^2*(alpha+beta+1))
 beta_sd <- function(alpha, beta) sqrt(beta_var(alpha, beta))
 beta_skew <- function(alpha, beta)
   (2*(beta-alpha)*sqrt(alpha+beta+1))/((alpha+beta+2)*sqrt(alpha*beta))
+beta_kurtosis <- function(alpha, beta)
+  6*((alpha-beta)^2*(alpha+beta+1)-alpha*beta*(alpha+beta+2))/(alpha*beta*(alpha+beta+2)*(alpha+beta+3))
 ```
 
 ## Data Generating Process
@@ -90,12 +94,43 @@ sim_iteration <- function(
 # Simulation Body
 set.seed(1)
 
-sim_res <- purrr::map_dfr(1:10, .f = sim_iteration,
+sim_res <- purrr::map_dfr(1:n_it, .f = sim_iteration,
                           n_sample = n_sample, func = hendrick_beta_4_2)
 ```
 
 ## Result
+For Beta distribution with parameters ($\alpha, \beta$), the moments can be calculated following the equations below:
 
+\begin{align*}
+  \mu & = \frac{\alpha}{\alpha+\beta} \\
+  \sigma^2 &= \frac{\alpha*\beta}{(\alpha+\beta)^2*(\alpha+\beta+1)} \\
+  \text{skewness} & = 
+  \frac{2*(\beta-\alpha)*\sqrt(\alpha+\beta+1)}{(\alpha+\beta+2)*\sqrt(\alpha*\beta)}\\
+  \text{excess kurtosis}&  = \frac{6*((\alpha-\beta)^2(\alpha+\beta+1)-\alpha*\beta*(\alpha+\beta+2))}{\alpha*\beta*(\alpha+\beta+2)*(\alpha+\beta+3)}.
+\end{align*}
+
+The expected and observed moments are presented in Table \ref{tab:comparison}. The expected moments are calculated based on the above equations with $\alpha = 4, \beta = 2$; the observed moments are the averaged moments of simulated over `r n_it` iterations.
+
+```{r echo = FALSE}
+expct <- c(Mean = beta_mean(4,2),
+           Variance = beta_var(4,2),
+           Skewness = beta_skew(4,2),
+           "Excess Kurtosis" = beta_kurtosis(4,2))
+
+sim_sum = sim_res %>% 
+  select(-it) %>% 
+  summarize_all(mean)
+
+rbind("Expected" = expct, 
+      "Observed" = sim_sum) %>% 
+  kable(
+    col.names = c("Mean", "Variance", "Skewness", "Excess Kurtosis"),
+    align = "lcccc",
+    caption = "Expected and observed moments of Beta(4,2)"
+    ref = "tab:comparison"
+  )
+
+```
 
 ### Goodness of fit
 
