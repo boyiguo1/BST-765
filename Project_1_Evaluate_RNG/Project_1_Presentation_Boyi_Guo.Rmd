@@ -1,14 +1,20 @@
 ---
 title: "Project 1 Evaluate RNG"
 author: "Boyi Guo"
-date: "2/9/2021"
+institute: |
+  | BST 765
+date: "Feb 16, 2021"
 output: 
-  pdf_document:
-     extra_dependencies: ["amsmath"]
+  beamer_presentation:
+    theme: "Szeged"
+    colortheme: "spruce"
+    toc: FALSE
+    number_section: false
+    slide_level: 2
 bibliography:
   - ref.bib
+nocite: '@*'
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
@@ -44,30 +50,28 @@ beta_kurtosis <- function(alpha, beta)
 ```
 
 ## Data Generating Process
-We follow @headrick2002 to simulate a Beta distribution ($\alpha = 4, \beta = 2$) from a normal distribution with mean 0 and standard deviation 1. Following the transformation equation, we can write a _standardized_ Beta distributed variable $Y_Z$ as a combination of polynomial terms of the normally distributed variable $X$,
+
+We follow @headrick2002 to simulate a Beta distribution ($\alpha = 4, \beta = 2$) from a normal distribution with mean 0 and standard deviation 1. 
 
 \begin{equation}
   \label{eq:transf}
   Y_Z = c_0 + c_1 X + c_2X^2 + c_3X^3 + c4X^4 + c_5X^5,
 \end{equation}
-
-where $X$ follows a normal distribution, N(0,1), $c_0 = `r c0`, c_1 = `r c1`, c_2 = `r c2`, c_3 = `r c3`, c_4 = `r c4`, c_5 = `r c5`$. We further scale and center the standardized beta distribution back to the original scale and range,
-
 \begin{equation}
   \label{eq:scale}
   Y = Y_Z*\sigma_{\beta_{4,2}} + \mu_{\beta_{4,2}},
 \end{equation}
+where $X$ follows a standard normal distribution, N(0,1), $c_0 = `r c0`, c_1 = `r c1`, c_2 = `r c2`, c_3 = `r c3`, c_4 = `r c4`, c_5 = `r c5`$. 
 
-where the mean of a Beta(4,2), $\mu_{\beta_{4,2}} \approx 0.67$ and the standard deviation of a Beta(4,2), $\sigma_{\beta_{4,2}} \approx 0.178$.
-
-In each iteration of the simulation, we first simulate $X_i, i=1,\dots,`r (n_sample <- 1e5) %>% format(scientific=FALSE, big.mark = ",")`$ independently follows a standard normal distribution, following with the aforementioned transformation (Equation \eqref{eq:transf},\eqref{eq:scale}) to generate $Y_i$. Sample mean, variance, skewness, and kurtosis are calculated for the `r (n_sample <- 1e5) %>% format(scientific=FALSE, big.mark = ",")` data points. In total, we have `r n_it` iterations of the described simulation.
+## Simulation
+* Simulate $X_i, i=1,\dots,`r (n_sample <- 1e5) %>% format(scientific=FALSE, big.mark = ",")` \sim N(0,1)$ 
+* $Y_i = f_{Hendrix}(X_i)$ described in Equation 1, 2
+* Repeat `r n_it` iterations 
 
 The simulation is conducted on a 64-bit Windows 10 Platform machine with Inter i5 processor and 8 GB RAM. The simulation is implemented in `r R.version$version.string`.
 
 
-### Implementation in R
-
-```{r}
+```{r echo = F}
 # Note: the constants c have been loaded in the computation environment
 hendrick_beta_4_2 <- function(x) {
   ret <- c0 + c1*x + c2*(x^2) + c3*(x^3) + c4*(x^4) + c5*(x^5)
@@ -104,7 +108,6 @@ sim_res <- purrr::map_dfr(1:n_it, .f = sim_iteration,
 
 ## Result
 For Beta distribution with parameters ($\alpha, \beta$), the moments can be calculated following the equations below:
-
 \begin{align*}
   \mu & = \frac{\alpha}{\alpha+\beta} \\
   \sigma^2 &= \frac{\alpha*\beta}{(\alpha+\beta)^2*(\alpha+\beta+1)} \\
@@ -113,7 +116,8 @@ For Beta distribution with parameters ($\alpha, \beta$), the moments can be calc
   \text{excess kurtosis}&  = \frac{6*((\alpha-\beta)^2(\alpha+\beta+1)-\alpha*\beta*(\alpha+\beta+2))}{\alpha*\beta*(\alpha+\beta+2)*(\alpha+\beta+3)}.
 \end{align*}
 
-The expected and observed moments are presented in Table 1. The expected moments are calculated based on the above equations with $\alpha = 4, \beta = 2$; the observed moments are the averaged moments of simulated over `r n_it` iterations. The averaged observed moments match with the epxected moments closesly, up to 4 digits. Meanwhile, via Figure 1, we see the sample distributions of the moments follow a bell shape roughtly. Central Limit effect exhibits, especially in variance and skewness.
+## Result (Cont.)
+* The averaged observed moments match with the epxected moments closesly, up to 4 digits. 
 
 ```{r echo = FALSE}
 expct <- c(Mean = beta_mean(4,2),
@@ -135,12 +139,14 @@ rbind("Expected" = expct,
   )
 
 ```
+## Result (Cont.)
+* Central Limit effect exhibits, especially in variance and skewness.
 
-```{r}
+```{r echo = FALSE, fig.height= 5}
 plot_mean <- ggplot(sim_res) +
   geom_histogram(aes(x = mean, y=..density..),
                  color="black", fill="lightblue") +
-  geom_density(aes(x = mean)) +
+  geom_density(aes(x = mean), size = 1.5) +
   xlab("Mean") +
   ylab("Density") +
   theme_classic()
@@ -148,7 +154,7 @@ plot_mean <- ggplot(sim_res) +
 plot_var <- ggplot(sim_res) +
   geom_histogram(aes(x = var, y=..density..),
                  color="black", fill="lightblue") +
-  geom_density(aes(x = var)) +
+  geom_density(aes(x = var), size = 1.5) +
   xlab("Variance") +
   ylab("Density") +
   theme_classic()
@@ -156,7 +162,7 @@ plot_var <- ggplot(sim_res) +
 plot_skew <- ggplot(sim_res) +
   geom_histogram(aes(x = skew, y=..density..),
                  color="black", fill="lightblue") +
-  geom_density(aes(x = skew)) +
+  geom_density(aes(x = skew), size = 1.5) +
   xlab("Skewness") +
   ylab("Density") +
   theme_classic()
@@ -164,7 +170,7 @@ plot_skew <- ggplot(sim_res) +
 plot_kurt <- ggplot(sim_res) +
   geom_histogram(aes(x = kurt, y=..density..),
                  color="black", fill="lightblue") +
-  geom_density(aes(x = kurt))  +
+  geom_density(aes(x = kurt), size = 1.5)  +
   xlab("Kurtosis") +
   ylab("Density") +
   theme_classic()
@@ -175,10 +181,11 @@ grid.arrange(plot_mean, plot_var, plot_skew, plot_kurt,
 
 ```
 
-### Goodness of fit
-To evaluate the goodness of fit, we randomly choose one of the simulation iteration and plot its empirical density. Expected density is also presented. The empirical density and expected density curves overlap with each other mostly. However, in the simulated data, there are data points out of the range of a Beta distribution. 
+## Goodness of fit
 
-```{r}
+ * there are data points out of the range of a Beta distribution. 
+
+```{r  echo = FALSE, fig.height= 5}
 set.seed(1)
 set.seed(sample(1:100,1))
 X <- rnorm(n_sample, mean = 0, sd = 1)
