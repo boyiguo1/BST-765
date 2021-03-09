@@ -1,0 +1,137 @@
+---
+title: "Project 2 Simulation Study of Cox Model and OLS Estimator"
+author: "Boyi Guo"
+institute: |
+  | BST 765
+date: "`r  Sys.Date()`"
+output: 
+  beamer_presentation:
+    theme: "Szeged"
+    colortheme: "spruce"
+    toc: FALSE
+    number_section: TRUE
+    slide_level: 3
+bibliography:
+  - ref.bib
+nocite: '@*'
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      # cache = TRUE,
+                      message = FALSE)
+
+library(tidyverse)
+library(ggplot2)
+
+res_30 <- readRDS("res_30.rds")
+res_100 <- readRDS("res_100.rds")
+```
+## Objectives
+
+* Review the simulation method for Cox proportional hazard model 
+* Examine the asymptotic property of Cox proportional hazard model and least square estimator when analyzing time-to-event data (without censoring)
+
+## Data Generating Process
+### Parametric Simulation
+
+* The survival time $y_i$ can be simulated via an exponential distribution with the rate parameter is $\beta X_i$
+\begin{align*}
+X_i &\sim 1 + Bernoulli(0.5), i = 1, \dots, n\\
+y_i &\sim exponential (\beta X_i), i = 1, \dots, n\\
+\end{align*}
+* Confidence interval coverage of Cox model coefficients is not tractable in this case
+* Give up
+
+### Simulation via Inverse Hazard Function
+
+We follow @bender2005 to simulate time-to-event data under 2-arm balanced randomized design 
+
+* Hazard Ratio = 2
+* Exponentially distributed survival time $S(t|x_i) \sim Exponential$
+* No censored events
+\begin{align*}
+\beta & = \log(2) \quad \\
+X_i & \sim Bernoulli(0.5)\\
+U_i & \sim Uniform(0,1)\\
+Y_i &= H_0^{-1}(-\log(U)*\exp(-\beta X_i))
+\end{align*}
+where the inverse function of cumulative hazard function $H_0^{-1}(x) = \lambda^{-1} x$, where $\lambda = 0.5$
+
+### Simulation Parameters
+* Power calculation^[http://powerandsamplesize.com/Calculators/Test-Time-To-Event-Data/Cox-PH-2-Sided-Equality]
+
+  * Assume $\alpha = 0.05$
+  * power ( 1 - $\beta$) = 0.80 $\Rightarrow$ $N_{total} = 66$, i.e. 33 subjects per group
+  * $N_{total}  = 30 \Rightarrow$  power ( 1 - $\beta$) $\approx$ 0.48 
+  * $N_{total}  = 100 \Rightarrow$  power ( 1 - $\beta$) $\approx$ 0.93
+  
+* $n_{it} = 1000$ replications
+
+## Result
+
+## Cox Proportional Hazard Models
+```{r}
+ggplot() +
+  # geom_histogram(aes(x = exp(cox_coef), color = "N=30", fill = "N=30"), data = res_30, alpha = 0.5) +
+  # geom_histogram(aes(x = exp(cox_coef), color = "N=100", fill = "N=100"), data = res_100, alpha = 0.5) +
+  geom_density(aes(x = cox_coef, color = "N=30", fill = "N=30"), data = res_30, alpha = 0.5) +
+  geom_density(aes(x = cox_coef, color = "N=100", fill = "N=100"), data = res_100, alpha = 0.5) +
+  geom_vline(xintercept = log(2), linetype = 2) +
+  # geom_vline(xintercept = mean(res_30$cox_coef)) +
+  # geom_vline(xintercept = mean(res_100$cox_coef))
+  ylab("Density")+
+  xlab("Log Hazard Ratio") +
+  ggtitle("Sampling Distribution of Log Hazard Ratio") +
+  theme_classic()
+```
+
+* Reject rate:
+  * 
+
+## Least Square Estimator
+```{r}
+ggplot() +
+  # geom_histogram(aes(x = exp(cox_coef), color = "N=30", fill = "N=30"), data = res_30, alpha = 0.5) +
+  # geom_histogram(aes(x = exp(cox_coef), color = "N=100", fill = "N=100"), data = res_100, alpha = 0.5) +
+  geom_density(aes(x = ols_coef, color = "N=30", fill = "N=30"), data = res_30, alpha = 0.5) +
+  geom_density(aes(x = ols_coef, color = "N=100", fill = "N=100"), data = res_100, alpha = 0.5) +
+  ylab("Density")+
+  xlab("OLS Estimate") +
+  ggtitle("Sampling Distribution of Ordinary Least Square Estimator") +
+  theme_classic()
+```
+
+
+### Coverage and Rejection Rate
+* Cox model rejection rate and confidence interval is as expected. 
+  * The coverage is slightly smaller than the anticipated 0.95 possibly due to simulation random error or Wald test is too liberal
+  * Suggest to run with larger number of replications
+  
+* Supprisingly, OLS model have similar rejection rate as Cox model. 
+
+```{r}
+rbind(
+res_30 %>% 
+  summarize(cox_rej = sum(cox_p < 0.05)/n(),
+            ols_rej = sum(ols_p < 0.05)/n(),
+            cox_cov = sum(cox_CI.97.5.. > log(2) & cox_CI.2.5.. < log(2))/n()) %>% 
+  mutate(N = 30),
+res_100 %>% 
+  summarize(cox_rej = sum(cox_p < 0.05)/n(),
+            ols_rej = sum(ols_p < 0.05)/n(),
+            cox_cov = sum(cox_CI.97.5.. > log(2) & cox_CI.2.5.. < log(2))/n()) %>% 
+  mutate(N = 100)
+) %>% 
+  select(N, cox_cov, cox_rej, ols_rej) %>% 
+  knitr::kable(col.names = c("Sample Size", "Cox Coverage", "Cox Rejection", "OLS Rejection"))
+```
+
+
+
+## Other Survial Data Simulations
+
+* @crowther2012 introduced time-to-event simulation when the baseline hazard function is more complicated or competing risk presents 
+
+* @austin2012 introduced survival data simulation when time-varying covariates present
+
+## Reference
