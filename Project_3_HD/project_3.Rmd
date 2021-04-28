@@ -1,0 +1,202 @@
+---
+title: "Project 3 High Dimensional Data Analysis"
+author: "Boyi Guo"
+institute: |
+  | BST 765
+date: "`r  Sys.Date()`"
+output: 
+  beamer_presentation:
+    theme: "Szeged"
+    colortheme: "spruce"
+    toc: FALSE
+    # number_section: TRUE
+    slide_level: 3
+header-includes:
+ - \usepackage{amsmath}
+ - \usepackage{bm}
+ - \AtBeginSubsection{}
+ - \AtBeginSection{}
+# bibliography:
+  # - ref.bib
+# nocite: '@*'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(gtsummary)
+library(glmnet)
+library(ncvreg)
+library(SSLASSO)
+library(EMVS)
+
+set.seed(1)
+
+#### Generate Simulation Data ###
+n <- 200
+p <- 1000
+
+cov_AR <- function(p, phi){
+  phi^abs(outer(1:p, 1:p, "-"))
+}
+
+X <- MASS::mvrnorm(n, rep(0, p), cov_AR(p, 0.8))
+beta <- c(4, 2, -4, -2, rep(0, p-4))
+y <- X %*% beta + rnorm(n)
+```
+
+## Objective
+* To introduce the concept _solution path_
+* To understand the behavior of Ridge penalty, LASSO penalty, Minimax Concave Penalty(MCP), Spike-and-slab LASSO, EMVS
+* To demonstrate data standardization matters in penalized model
+
+
+## Solutin Path
+* Variable selection via regularization/penalization is continuous process
+  * in comparison to step-wise selection
+  * coefficient estimate is a function of tuning parameter, e.g. Ridge regression
+* Solution path plots the coefficient estimate across different values of tuning parameter
+
+## Solution Path Example
+Two forms for tuning parameter of LASSO:
+L1 Norm $\sum\limits |\beta_i|$ VS Shrinkage parameter $\lambda$
+
+```{r solution_path_eg, fig.height= 5}
+lasso_mdl <- glmnet(x = X, y = y, alpha = 1)
+
+par(mfrow=c(1,2))
+plot(lasso_mdl, xvar = c("norm"), label = TRUE)
+plot(lasso_mdl, xvar = c("lambda"), label = TRUE)
+par(mfrow=c(1,1))
+```
+
+
+
+
+## Simulation Study
+* High dimension setting ($p >> n$)
+* Highly correlated predictors
+* Sparse signal (4/1000 active predictor)
+* Examine the solution path
+$$
+\begin{aligned}
+i& = 1,\dots,200\\
+X_i &\sim N_{1000}(\bm 0, \Sigma_{AR(0.8)})\\
+\bm \beta &= \begin{pmatrix} 4 & 2 & -4 & -2 & \underbrace{ 0  \hspace{0.2cm}\cdots \hspace{0.2cm} 0}_{996} \end{pmatrix}^T\\
+y_i &= \sum\limits_{j=1}^p\beta_jX_{ij} + \epsilon_i, \epsilon_i\sim N(0,1)
+\end{aligned}
+$$
+* One iteration, 10-fold cross-validation
+
+
+<!-- ## -->
+
+
+
+## Ridge
+* Designed to solve collinearity problem
+* Doesn't work well for high-dimensional setting as the coefficients doesn't shrink to zero
+  * extremely biased estimates
+```{r ridge, fig.height= 5}
+ridge_mdl <- glmnet(x = X, y = y, alpha = 0, intercept = FALSE)
+plot(ridge_mdl)
+```
+
+## LASSO
+* Assumption: signals are sparse, i.e. small amount of non-zero coefficient
+* LASSO include the "truth" as an subset $\beta \subseteq \hat \beta_{LASSO}$ 
+* Cross-validated model select more than 20 predictors
+```{r lasso, fig.height= 5}
+lasso_mdl <- glmnet(x = X, y = y, alpha = 1)
+plot(lasso_mdl, label = TRUE)
+```
+
+
+```{r cv.lasso, eval = F}
+lasso_mdl <- cv.glmnet(x = X, y = y, alpha = 1)
+# coef(lasso_mdl)!=0
+```
+
+## MCP
+* Fancier LASSO
+* Less biased estimates, faster coefficient Stabilization
+* Extra parameter $\gamma$
+```{r, fig.height= 5}
+MCP_mdl <- ncvreg(X = X, y = y)
+plot(MCP_mdl)
+```
+
+
+## EMVS
+* Spike-and-slab Mixture Normal Prior with Mximum A Posteri Estimate
+* More complicated variable selection, depending on a soft threshold
+
+```{r, eval = F}
+v0 = seq(0.1, 2, length.out = 20)
+v1 = 1000
+beta_init = rep(0, p)
+sigma_init = 1
+a = b = 1
+epsilon = 10^{-5}
+
+emvs_mdl <- suppressMessages(EMVS(Y=y, X=X, v0 = v0, v1 = v1, type = "betabinomial",independent = FALSE, beta_init = beta_init, sigma_init = sigma_init,epsilon = epsilon, a = a, b = b))
+
+EMVSplot(emvs_mdl)
+
+EMVSbest(emvs_mdl)
+```
+
+
+## Spike and Slab Lasso
+* Spike-and-slab Mixture Double exponential Prior with Maximum A Posteri Estimate
+```{r , fig.height= 5}
+sslasso_mdl <- SSLASSO(X = X, y = y, warn = T)
+plot(sslasso_mdl)
+```
+
+## SNP data
+```{r}
+dat <- readr::read_csv("AA_SNPs.csv") %>% 
+  select(-c(black, X499, has_bled)) %>% 
+  mutate(
+    Sex = factor(female, labels = c("Male", "Female")),
+    HB_CAT = factor(HB_CAT, levels = c("low", "med", "high")))
+
+dat %>% 
+  select(Age, Sex, HB_CAT, firstbleed, T1, T2r) %>% 
+  tbl_summary(by = Sex,
+              missing = "ifany") %>% 
+  add_overall() #%>% 
+  #modify_caption("Descriptive statistics of the sample stratified by sex")
+
+# Add table cap: `Table 1`
+```
+
+## LASSO models
+Un-standardized design matrix VS Standardized
+
+```{r , fig.height= 5}
+
+cmp_dat <- dat %>% select(firstbleed, starts_with("rs")) %>% filter(complete.cases(.))
+
+
+mdl_unstd <- glmnet(x = cmp_dat %>% select(starts_with("rs")) %>% data.matrix, y = cmp_dat$firstbleed, standardize = F)
+
+# mdl_unstd <- cv.glmnet(x = cmp_dat %>% select(starts_with("rs"))%>% data.matrix, y = cmp_dat$firstbleed, standardize = F)
+
+mdl_std <- glmnet(x = cmp_dat %>% select(starts_with("rs")), y = cmp_dat$firstbleed)
+# mdl_std <- cv.glmnet(x = cmp_dat %>% select(starts_with("rs"))%>% data.matrix, y = cmp_dat$firstbleed, standardize = T)
+# sum(coef(mdl_std)!=0)
+
+par(mfrow = c(1,2))
+plot(mdl_unstd, main = "Un-standardized", label = T)
+plot(mdl_std, main = "Standardized", label = T)
+```
+
+## Closing Remarks
+* Know when to standardize your data before model fitting
+  * Most of time but not all the time
+* 1-SE rule when selecting tuning parameter
+* Know when and why to use validation/nested validation
+  * Model selection VS Model assessment
+  * To estimate in-sample error / extra-sample error
